@@ -1,0 +1,31 @@
+# ====== Kafka and Zookeeper  ======
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+# ====== Spark ======
+  spark:
+    image: bitnami/spark:3.5
+    container_name: spark
+    depends_on:
+      - kafka
+    environment:
+      - SPARK_MODE=master
+    volumes:
+      - ./spark:/opt/spark-apps
+    ports:
+      - "8080:8080"
