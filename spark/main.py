@@ -1,64 +1,56 @@
 import os
 from pyspark.sql import SparkSession
 
-from streams.orders import build_orders_stream
-from streams.payments import build_payments_stream
-from streams.items import build_items_stream
+from streams.orders_streaming import orders_stream
+from streams.items_streaming import items_stream
+from streams.payments_streaming import payments_stream
 
 from schemas.orders_schema import orders_schema
-from schemas.payments_schema import payments_schema
-from schemas.items_schema import items_schema
-
+from schemas.items_schemas import items_schema
+from schemas.payments_schemas import payments_schema
 
 def main():
-    # ===== Spark Session =====
     spark = (
         SparkSession.builder
-        .appName("streaming-pipeline")
+        .appName("Ecommerce data streaming")
         .getOrCreate()
     )
+    spark.sparkContext.setLogLevel("WARN")
+    #load semua hal dalam env
 
-    # ===== ENV =====
     kafka_bootstrap = os.getenv("KAFKA_BOOTSTRAP_SERVERS")
-    topic_orders = os.getenv("TOPIC_ORDERS")
-    topic_payments = os.getenv("TOPIC_ORDER_PAYMENTS")
-    topic_items = os.getenv("TOPIC_ORDER_ITEMS")
+    orders_topic = os.getenv("TOPIC_ORDERS")
+    payments_topic = os.getenv("TOPIC_ORDER_PAYMENTS")
+    items_topic = os.getenv("TOPIC_ORDER_ITEMS")
+    checkpoint_base = os.getenv("SPARK_CHECKPOINT_BASE")
 
-    # ===== Build Streams =====
-    orders_df = build_orders_stream(
-        spark, kafka_bootstrap, topic_orders, orders_schema
-    )
+    #load streams
+    orders_df = orders_stream(spark, kafka_bootstrap, orders_topic, orders_schema)
+    items_df = items_stream(spark, kafka_bootstrap, items_topic, items_schema)
+    payments_df = payments_stream(spark, kafka_bootstrap, payments_topic, payments_schema)
 
-    payments_df = build_payments_stream(
-        spark, kafka_bootstrap, topic_payments, payments_schema
-    )
-
-    items_df = build_items_stream(
-        spark, kafka_bootstrap, topic_items, items_schema
-    )
-
-    # ===== (TEMP) Output for sanity check =====
-    orders_query = (
-        orders_df.writeStream
-        .format("console")
-        .option("truncate", False)
-        .start()
-    )
-
-    payments_query = (
-        payments_df.writeStream
-        .format("console")
-        .option("truncate", False)
-        .start()
-    )
-
-    items_query = (
-        items_df.writeStream
-        .format("console")
-        .option("truncate", False)
-        .start()
-    )
-
+    #checkpoint independent untuk setiap stream
+    orders_c = (orders_df.writeStream
+                .format("parquet")
+                .option("path", "/opt/spark-output/orders")
+                .option("checkpointLocation", f"{checkpoint_base}/orders")
+                .outputMode("append")
+                .start()
+                )
+    items_c = (items_df.writeStream
+               .format("parquet")
+               .option("path", "/opt/spark-output/items")
+               .option("checkpointLocation", f"{checkpoint_base}/items")
+               .outputMode("append")
+               .start()
+               )
+    payments_c = (payments_df.writeStream
+                  .format("parquet")
+                  .option("path", "/opt/spark-output/payments")
+                  .option("checkpointLocation", f"{checkpoint_base}/payments")
+                  .outputMode("append")
+                  .start()
+                  )
     spark.streams.awaitAnyTermination()
 
 

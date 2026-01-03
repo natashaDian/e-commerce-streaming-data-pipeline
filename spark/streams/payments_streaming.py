@@ -8,7 +8,7 @@ def payments_stream(spark, kafka_bootstrap, topic, schema):
         .format("kafka")
         .option("kafka.bootstrap.servers", kafka_bootstrap)
         .option("subscribe", topic)
-        .option("startingOffsets", "latest")
+        .option("startingOffsets", "earliest")
         .load()
         .select(from_json(col("value").cast("string"), schema).alias("d"))
         .select("d.*")
